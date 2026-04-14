@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InstaSaver Extension</title>
+  <style>
+    body {
+      width: 300px;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #FAFAFA;
+      color: #262626;
+    }
+    .header {
+      background: linear-gradient(135deg, #833AB4, #E1306C, #F77737);
+      color: white;
+      padding: 16px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .header svg {
+      width: 20px;
+      height: 20px;
+    }
+    .content {
+      padding: 20px;
+      text-align: center;
+    }
+    .status {
+      font-size: 14px;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .status.active {
+      color: #0095F6;
+      font-weight: 500;
+    }
+    .features {
+      text-align: left;
+      font-size: 13px;
+      background: white;
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid #DBDBDB;
+    }
+    .features ul {
+      margin: 0;
+      padding-left: 20px;
+      color: #8E8E8E;
+    }
+    .features li {
+      margin-bottom: 6px;
+    }
+    .footer {
+      padding: 12px;
+      text-align: center;
+      font-size: 11px;
+      color: #A8A8A8;
+      border-top: 1px solid #EFEFEF;
+    }
+    .btn-open {
+      display: inline-block;
+      margin-top: 15px;
+      padding: 10px 20px;
+      background-color: #0095F6;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background-color 0.2s;
+    }
+    .btn-open:hover {
+      background-color: #1877F2;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      InstaSaver
+    </h1>
+  </div>
+  
+  <div class="content">
+    <div id="statusIndicator" class="status">
+      Checking connection to Instagram...
+    </div>
+    
+    <div class="features">
+      <strong>Supported features:</strong>
+      <ul>
+        <li>Download Photos & Videos (Posts)</li>
+        <li>Download Reels (High Quality)</li>
+        <li>Download Stories</li>
+      </ul>
+    </div>
+    
+    <a href="https://www.instagram.com" target="_blank" class="btn-open">Open Instagram</a>
+  </div>
+  
+  <div class="footer">
+    InstaSaver Extension v1.2.0
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

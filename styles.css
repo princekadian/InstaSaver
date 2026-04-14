@@ -1,0 +1,130 @@
+/* ── InstaSaver Extension Styles ─────────────────────────────────────────── */
+/* All buttons use position:fixed on document.body so Instagram's overlay     */
+/* divs can NEVER intercept clicks.                                            */
+
+/* ── Base button ─────────────────────────────────────────────────────────── */
+.is-btn {
+  position: fixed !important;
+  z-index: 2147483647 !important;          /* max possible z-index */
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 8px 14px !important;
+  border: none !important;
+  border-radius: 20px !important;
+  cursor: pointer !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.3px !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #833AB4 0%, #E1306C 50%, #F77737 100%) !important;
+  background-size: 200% 200% !important;
+  animation: is-gradient 3s ease infinite !important;
+  box-shadow: 0 4px 18px rgba(225, 48, 108, 0.55) !important;
+  transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+  white-space: nowrap !important;
+  pointer-events: all !important;
+  user-select: none !important;
+  outline: none !important;
+  text-decoration: none !important;
+  line-height: 1 !important;
+}
+
+.is-btn:hover {
+  transform: scale(1.08) !important;
+  box-shadow: 0 6px 24px rgba(225, 48, 108, 0.7) !important;
+}
+
+.is-btn:active {
+  transform: scale(0.95) !important;
+}
+
+.is-btn svg {
+  width: 15px !important;
+  height: 15px !important;
+  flex-shrink: 0 !important;
+  stroke: #fff !important;
+}
+
+@keyframes is-gradient {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ── Loading state ───────────────────────────────────────────────────────── */
+.is-btn.is-loading {
+  opacity: 0.7 !important;
+  pointer-events: none !important;
+}
+
+.is-btn.is-loading::after {
+  content: '' !important;
+  width: 13px !important;
+  height: 13px !important;
+  border: 2px solid rgba(255,255,255,0.35) !important;
+  border-top-color: #fff !important;
+  border-radius: 50% !important;
+  animation: is-spin 0.65s linear infinite !important;
+  display: inline-block !important;
+}
+
+@keyframes is-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Post button — absolute inside article, top-right ────────────────────── */
+.is-post {
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  left: auto !important;
+  bottom: auto !important;
+}
+
+/* ── Reel button — fixed top-right of viewport ──────────────────────────── */
+.is-reel {
+  top: 80px !important;
+  right: 20px !important;
+  left: auto !important;
+  bottom: auto !important;
+}
+
+/* ── Story button — fixed top-right of viewport ─────────────────────────── */
+.is-story {
+  top: 20px !important;
+  right: 20px !important;
+  left: auto !important;
+  bottom: auto !important;
+}
+
+.is-story:hover {
+  transform: scale(1.08) !important;
+}
+
+/* ── Toast notification ──────────────────────────────────────────────────── */
+.is-toast {
+  position: fixed !important;
+  bottom: 28px !important;
+  left: 50% !important;
+  transform: translateX(-50%) translateY(16px) !important;
+  z-index: 2147483647 !important;
+  background: linear-gradient(135deg, #833AB4, #E1306C) !important;
+  color: #fff !important;
+  padding: 11px 22px !important;
+  border-radius: 30px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 8px 28px rgba(131, 58, 180, 0.5) !important;
+  opacity: 0 !important;
+  transition: opacity 0.28s ease, transform 0.28s ease !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+}
+
+.is-toast.show {
+  opacity: 1 !important;
+  transform: translateX(-50%) translateY(0) !important;
+}

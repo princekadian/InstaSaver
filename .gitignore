@@ -1,0 +1,24 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Packed extensions
+*.crx
+*.pem
+*.zip
+
+# Node (if added later)
+node_modules/
+package-lock.json
+
+# Misc
+*.log
+.env
