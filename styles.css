@@ -83,6 +83,14 @@
   bottom: auto !important;
 }
 
+/* ── Single post page button — fixed top-right ───────────────────────────── */
+.is-post-page {
+  top: 90px !important;
+  right: 20px !important;
+  left: auto !important;
+  bottom: auto !important;
+}
+
 /* ── Reel button — fixed top-right of viewport ──────────────────────────── */
 .is-reel {
   top: 80px !important;

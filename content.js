@@ -58,6 +58,12 @@
     return id.toString();
   }
 
+  function getShortcodeFromPath(pathname) {
+    const parts = (pathname || '').split('/').filter(Boolean);
+    const idx = parts.findIndex(p => ['p', 'reel', 'reels', 'tv'].includes(p));
+    return idx !== -1 ? parts[idx + 1] : null;
+  }
+
   // ── Method A: Instagram internal media API ─────────────────────────────────
   // Converts the reel shortcode → media_id → hits /api/v1/media/{id}/info/
   // carouselIdx: optional 0-based index for carousel posts
@@ -241,9 +247,10 @@
   // ── Carousel helpers ────────────────────────────────────────────────────────
   // Detect which carousel slide is currently visible (0-indexed)
   function getCarouselIndex(article) {
+    const root = article || document.body;
     // Method 1: Find dot indicators (most reliable)
     // Instagram renders dots as a row of small circular divs; the active one is bigger
-    const divs = article.querySelectorAll('div');
+    const divs = root.querySelectorAll('div');
     for (const container of divs) {
       const kids = container.children;
       if (kids.length < 2 || kids.length > 15) continue;
@@ -281,9 +288,9 @@
     }
 
     // Method 2: Centered <li> fallback
-    const lis = article.querySelectorAll('ul li');
+    const lis = root.querySelectorAll('ul li');
     if (lis.length >= 2) {
-      const ar = article.getBoundingClientRect();
+      const ar = (article || document.body).getBoundingClientRect();
       const centerX = ar.left + ar.width / 2;
       for (let i = 0; i < lis.length; i++) {
         const r = lis[i].getBoundingClientRect();
@@ -300,7 +307,8 @@
 
   // Find the currently visible large image in the article (for carousels)
   function getVisibleImage(article) {
-    const imgs = [...article.querySelectorAll('img')].filter(img => {
+    const root = article || document.body;
+    const imgs = [...root.querySelectorAll('img')].filter(img => {
       const w = img.naturalWidth || img.width || 0;
       const h = img.naturalHeight || img.height || 0;
       return w >= 200 && h >= 200;
@@ -309,7 +317,7 @@
     if (imgs.length === 1) return imgs[0];
 
     // Carousel: pick image closest to article's horizontal center
-    const ar = article.getBoundingClientRect();
+    const ar = (article || document.body).getBoundingClientRect();
     const centerX = ar.left + ar.width / 2;
     let best = null, bestDist = Infinity;
     for (const img of imgs) {
@@ -339,24 +347,27 @@
   // ── Get post image/video URL ───────────────────────────────────────────────
   async function getPostUrl(article) {
     toast('🔍 Finding media URL…', 10000);
+    const root = article || document;
 
     // Extract shortcode from article links (e.g. /p/ABC123/ or /reel/ABC123/)
-    let shortcode = null;
-    const postLink = article.querySelector('a[href*="/p/"], a[href*="/reel/"], a[href*="/tv/"]');
-    if (postLink) {
-      const parts = postLink.getAttribute('href').split('/').filter(Boolean);
-      const idx = parts.findIndex(p => ['p', 'reel', 'tv'].includes(p));
-      if (idx !== -1 && parts[idx + 1]) shortcode = parts[idx + 1];
+    let shortcode = getShortcodeFromPath(location.pathname);
+    if (!shortcode) {
+      const postLink = root.querySelector('a[href*="/p/"], a[href*="/reel/"], a[href*="/tv/"]');
+      if (postLink) {
+        const parts = postLink.getAttribute('href').split('/').filter(Boolean);
+        const idx = parts.findIndex(p => ['p', 'reel', 'tv'].includes(p));
+        if (idx !== -1 && parts[idx + 1]) shortcode = parts[idx + 1];
+      }
     }
 
     // Detect carousel (has next/prev buttons or dots)
-    const isCarousel = !!article.querySelector('[aria-label*="Next"], [aria-label*="Go to next"], [aria-label*="Go back"], [aria-label*="previous" i]')
-                    || article.querySelectorAll('ul li').length > 1;
+    const isCarousel = !!root.querySelector('[aria-label*="Next"], [aria-label*="Go to next"], [aria-label*="Go back"], [aria-label*="previous" i]')
+                    || root.querySelectorAll('ul li').length > 1;
     const slideIdx = isCarousel ? getCarouselIndex(article) : undefined;
     console.log('[InstaSaver] Post:', shortcode, 'carousel:', isCarousel, 'slide:', slideIdx);
 
     // Check if the currently visible slide has a video
-    const hasVideo = !!article.querySelector('video');
+    const hasVideo = !!root.querySelector('video');
 
     if (hasVideo) {
       // Try API with carousel index — verify it returns a video URL
@@ -369,6 +380,14 @@
       // Injector fallback for video
       const url = await askInjectorForUrl();
       if (url) return { url, type: 'video' };
+      // DOM fallback: use current video source
+      const vid = root.querySelector('video');
+      if (vid) {
+        const vsrc = vid.currentSrc || vid.src || (vid.querySelector('source') && vid.querySelector('source').src);
+        if (isValid(vsrc)) return { url: cleanUrl(vsrc), type: 'video' };
+      }
+      const ogVideo = document.querySelector('meta[property="og:video"]');
+      if (ogVideo && isValid(ogVideo.content)) return { url: cleanUrl(ogVideo.content), type: 'video' };
     }
 
     // For images — try API with carousel index
@@ -381,6 +400,10 @@
     const visibleImg = getVisibleImage(article);
     const imgUrl = extractBestUrl(visibleImg);
     if (imgUrl) return { url: imgUrl, type: 'post' };
+
+    // Fallback: Open Graph image for single post pages
+    const ogImg = document.querySelector('meta[property="og:image"]');
+    if (ogImg && isValid(ogImg.content)) return { url: cleanUrl(ogImg.content), type: 'post' };
 
     // Last resort: global injector
     const url = await askInjectorForImage();
@@ -420,6 +443,17 @@
       const { url, type } = await getPostUrl(article);
       await blobDownload(url, makeFilename(type));
     }, article);
+  }
+
+  function processSinglePostPage() {
+    const isPostPage = /^\/p\//.test(location.pathname) || /^\/tv\//.test(location.pathname);
+    if (!isPostPage) return;
+    if (document.getElementById('_is_post_page')) return;
+    const article = document.querySelector('article');
+    makeBtn('_is_post_page', 'is-post-page', 'Save Post', async () => {
+      const { url, type } = await getPostUrl(article);
+      await blobDownload(url, makeFilename(type));
+    }, document.body);
   }
 
   // ── Reel injection — fixed top-right, only on reel pages ──────────────────
@@ -501,12 +535,17 @@
       const el = document.getElementById('_is_reel');
       if (el) { el.remove(); lastReelHref = ''; }
     }
+    if (!/^\/p\//.test(location.pathname) && !/^\/tv\//.test(location.pathname)) {
+      const el = document.getElementById('_is_post_page');
+      if (el) el.remove();
+    }
   }
 
   // ── Main injector ──────────────────────────────────────────────────────────
   function inject() {
     cleanupButtons();
     document.querySelectorAll('article').forEach(processPost);
+    processSinglePostPage();
     if (location.pathname.includes('/reel')) processReel();
     if (location.pathname.includes('/stories/')) processStory();
   }
