@@ -64,6 +64,63 @@
     return idx !== -1 ? parts[idx + 1] : null;
   }
 
+  // ── Fetch shortcode JSON (web API) ───────────────────────────────────────
+  function extractFromShortcodeJson(data, carouselIdx) {
+    let media = null;
+    if (data && data.graphql && data.graphql.shortcode_media) media = data.graphql.shortcode_media;
+    if (!media && data && data.items && data.items[0]) media = data.items[0];
+    if (!media) return null;
+
+    if (media.edge_sidecar_to_children && media.edge_sidecar_to_children.edges &&
+        carouselIdx !== undefined) {
+      const edges = media.edge_sidecar_to_children.edges;
+      if (edges[carouselIdx] && edges[carouselIdx].node) media = edges[carouselIdx].node;
+    }
+
+    if (media.video_url && isValid(media.video_url)) {
+      return { url: cleanUrl(media.video_url), type: 'video' };
+    }
+
+    if (media.video_versions && media.video_versions.length) {
+      const best = [...media.video_versions].sort((a, b) => (b.width || 0) - (a.width || 0))[0];
+      if (best && isValid(best.url)) return { url: cleanUrl(best.url), type: 'video' };
+    }
+
+    if (media.display_resources && media.display_resources.length) {
+      const best = [...media.display_resources].sort((a, b) => (b.config_width || 0) - (a.config_width || 0))[0];
+      if (best && isValid(best.src)) return { url: cleanUrl(best.src), type: 'post' };
+    }
+
+    if (media.image_versions2 && media.image_versions2.candidates && media.image_versions2.candidates.length) {
+      const best = [...media.image_versions2.candidates].sort((a, b) => (b.width || 0) - (a.width || 0))[0];
+      if (best && best.url) return { url: cleanUrl(best.url), type: 'post' };
+    }
+
+    return null;
+  }
+
+  async function fetchShortcodeJson(shortcode, kind, carouselIdx) {
+    if (!shortcode) return null;
+    const base = kind === 'reel' ? 'reel' : (kind === 'tv' ? 'tv' : 'p');
+    const url = `https://www.instagram.com/${base}/${shortcode}/?__a=1&__d=dis`;
+    try {
+      const resp = await fetch(url, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'X-IG-App-ID': '936619743392459',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return extractFromShortcodeJson(data, carouselIdx);
+    } catch (err) {
+      console.warn('[InstaSaver] shortcode JSON error:', err.message);
+      return null;
+    }
+  }
+
   // ── Method A: Instagram internal media API ─────────────────────────────────
   // Converts the reel shortcode → media_id → hits /api/v1/media/{id}/info/
   // carouselIdx: optional 0-based index for carousel posts
@@ -173,6 +230,14 @@
     });
   }
 
+  async function askInjectorForUrlStable() {
+    const first = await askInjectorForUrl();
+    await new Promise(r => setTimeout(r, 250));
+    const second = await askInjectorForUrl();
+    if (isValid(second) && second === first) return second;
+    return isValid(second) ? second : first;
+  }
+
   function askInjectorForImage() {
     return new Promise((resolve) => {
       const handler = (e) => {
@@ -227,17 +292,24 @@
     const scIdx = parts.findIndex(p => ['reels','reel','p','tv'].includes(p));
     const shortcode = scIdx !== -1 ? parts[scIdx + 1] : null;
 
-    // Method 1: Instagram internal API (most reliable — server returns real data)
+    // Method 1: Instagram web JSON (often includes full audio)
+    if (shortcode) {
+      const json = await fetchShortcodeJson(shortcode, 'reel');
+      if (json && json.url) { console.log('[InstaSaver] Got URL via web JSON'); return json.url; }
+    }
+
+    // Method 2: Instagram internal API (reliable — server returns real data)
     if (shortcode) {
       const url = await fetchViaApi(shortcode);
       if (url) { console.log('[InstaSaver] Got URL via API'); return url; }
     }
 
-    // Method 2: Page HTML regex (server-rendered page contains video_url)
+    // Method 3: Page HTML regex (server-rendered page contains video_url)
     const url2 = await fetchPageVideoUrl(location.href);
     if (url2) { console.log('[InstaSaver] Got URL via page HTML'); return url2; }
 
-    // Method 3: Injector hooks (__additionalDataLoaded / fetch intercept)
+    // Method 4: Injector hooks (__additionalDataLoaded / fetch intercept)
+    // Only trust injector if it has data for this exact path
     const url3 = await askInjectorForUrl();
     if (url3) { console.log('[InstaSaver] Got URL via injector'); return url3; }
 
@@ -348,6 +420,7 @@
   async function getPostUrl(article) {
     toast('🔍 Finding media URL…', 10000);
     const root = article || document;
+    const strictPostPage = /^\/p\//.test(location.pathname) || /^\/tv\//.test(location.pathname);
 
     // Extract shortcode from article links (e.g. /p/ABC123/ or /reel/ABC123/)
     let shortcode = getShortcodeFromPath(location.pathname);
@@ -370,6 +443,12 @@
     const hasVideo = !!root.querySelector('video');
 
     if (hasVideo) {
+      // Try web JSON first — best chance for audio
+      if (shortcode) {
+        const json = await fetchShortcodeJson(shortcode, 'p', slideIdx);
+        if (json && json.url && json.type === 'video') return { url: json.url, type: 'video' };
+      }
+
       // Try API with carousel index — verify it returns a video URL
       if (shortcode) {
         const url = await fetchViaApi(shortcode, slideIdx);
@@ -377,8 +456,16 @@
           return { url, type: 'video' };
         }
       }
+
+      // For single post pages, avoid injector/DOM fallbacks to prevent wrong feed videos
+      if (strictPostPage) {
+        const ogVideo = document.querySelector('meta[property="og:video"]');
+        if (ogVideo && isValid(ogVideo.content)) return { url: cleanUrl(ogVideo.content), type: 'video' };
+        return { url: null, type: 'video' };
+      }
+
       // Injector fallback for video
-      const url = await askInjectorForUrl();
+      const url = await askInjectorForUrlStable();
       if (url) return { url, type: 'video' };
       // DOM fallback: use current video source
       const vid = root.querySelector('video');
@@ -390,7 +477,11 @@
       if (ogVideo && isValid(ogVideo.content)) return { url: cleanUrl(ogVideo.content), type: 'video' };
     }
 
-    // For images — try API with carousel index
+    // For images — try web JSON / API with carousel index
+    if (shortcode) {
+      const json = await fetchShortcodeJson(shortcode, 'p', slideIdx);
+      if (json && json.url) return { url: json.url, type: json.type || 'post' };
+    }
     if (shortcode) {
       const apiUrl = await fetchViaApi(shortcode, slideIdx);
       if (apiUrl) return { url: apiUrl, type: 'post' };
@@ -405,9 +496,13 @@
     const ogImg = document.querySelector('meta[property="og:image"]');
     if (ogImg && isValid(ogImg.content)) return { url: cleanUrl(ogImg.content), type: 'post' };
 
-    // Last resort: global injector
-    const url = await askInjectorForImage();
-    return { url, type: 'post' };
+    // Last resort: global injector (skip for strict post page to avoid wrong feed media)
+    if (!strictPostPage) {
+      const url = await askInjectorForImage();
+      return { url, type: 'post' };
+    }
+
+    return { url: null, type: 'post' };
   }
 
   // ── Button factory ─────────────────────────────────────────────────────────
@@ -507,11 +602,11 @@
             await blobDownload(url2, makeFilename('story-video'));
             return;
           }
-          const url3 = await askInjectorForUrl();
-          if (url3) {
-            await blobDownload(url3, makeFilename('story-video'));
-            return;
-          }
+         const url3 = await askInjectorForUrlStable();
+         if (url3) {
+           await blobDownload(url3, makeFilename('story-video'));
+           return;
+         }
         } else {
           const url = await askInjectorForImage();
           if (url) {

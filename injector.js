@@ -4,7 +4,18 @@
 (function () {
   'use strict';
 
-  const store = {}; // shortcode/path → video url
+  const store = {}; // path → { url, source }
+
+  function setStore(path, url, source) {
+    if (!isGood(url)) return;
+    const clean = cleanUrl(url);
+    const existing = store[path];
+    if (existing && existing.source === 'data' && source !== 'data') return;
+    store[path] = { url: clean, source };
+    window.__instaSaverVideoUrl = clean; // simple global for quick access
+    window.__instaSaverVideoUrlPath = path;
+    console.log('[InstaSaver] Saved URL for', path, ':', clean.slice(0, 80), '(' + source + ')');
+  }
 
   function cleanUrl(url) {
     if (!url || typeof url !== 'string') return null;
@@ -45,11 +56,8 @@
   function saveUrl(data) {
     const url = findVideoUrl(data, 0);
     if (url) {
-      const clean = cleanUrl(url);
-      const path  = location.pathname;
-      store[path] = clean;
-      window.__instaSaverVideoUrl = clean; // simple global for quick access
-      console.log('[InstaSaver] Saved URL for', path, ':', clean.slice(0, 80));
+      const path = location.pathname;
+      setStore(path, url, 'data');
     }
   }
 
@@ -77,11 +85,8 @@
 
     // Capture direct .mp4 CDN request URLs (strip byte-range)
     if (reqUrl.includes('.mp4') && !reqUrl.startsWith('blob:')) {
-      const clean = cleanUrl(reqUrl);
-      if (!store[location.pathname] || !reqUrl.includes('bytestart')) {
-        store[location.pathname] = clean;
-        window.__instaSaverVideoUrl = clean;
-        console.log('[InstaSaver] fetch mp4:', clean.slice(0, 80));
+      if (!reqUrl.includes('bytestart')) {
+        setStore(location.pathname, reqUrl, 'mp4');
       }
     }
 
@@ -101,11 +106,7 @@
   const origOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
     if (url && url.includes('.mp4') && !url.startsWith('blob:')) {
-      const clean = cleanUrl(url);
-      if (!store[location.pathname]) {
-        store[location.pathname] = clean;
-        window.__instaSaverVideoUrl = clean;
-      }
+      setStore(location.pathname, url, 'mp4');
     }
     this.addEventListener('load', function () {
       try {
@@ -118,7 +119,9 @@
 
   // ── Respond to content.js requests ────────────────────────────────────────
   window.addEventListener('__is_get_video_url', () => {
-    const url = store[location.pathname] || window.__instaSaverVideoUrl || null;
+    const entry = store[location.pathname];
+    const url = (entry && entry.url) ||
+      ((window.__instaSaverVideoUrlPath === location.pathname) ? window.__instaSaverVideoUrl : null) || null;
     const valid = isGood(url) ? url : null;
     console.log('[InstaSaver] Responding:', valid ? valid.slice(0, 80) : 'none');
     window.dispatchEvent(new CustomEvent('__is_video_url_result', { detail: { url: valid } }));
